@@ -3,8 +3,7 @@
 # Lines starting with # are comments and ignored
 # Empty lines are ignored
 
-Hamilton Norris
-Theman JR
+Your name
 
 # Add more admin usernames below:
 # Fleet Commander
