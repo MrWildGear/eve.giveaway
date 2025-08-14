@@ -544,6 +544,10 @@ class EVEGiveawayGUI:
 • Games auto-end after 2 minutes
 • Players can only enter once per game
 
+⚙️ ADMIN SETUP:
+• Edit admins.txt to add/remove admin users
+• One username per line, # for comments
+
 🔍 The tool automatically monitors EVE chat logs and updates in real-time."""
         
         # Make instructions copyable using Text widget
