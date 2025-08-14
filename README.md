@@ -115,12 +115,15 @@ The tool automatically monitors: `~/Documents/EVE/logs/Chatlogs/`
 ## 🔧 Configuration
 
 ### Admin Users
-Edit the `admins.txt` file to add or remove admin users:
+1. **Copy the template**: `copy admins.template.txt admins.txt`
+2. **Edit the file**: Replace usernames with your actual admin users
+3. **Format**: One username per line, `#` for comments
+
 ```txt
-# Add one username per line
-Hamilton Norris
-YourOtherAdminName
+# Example admins.txt content:
+YourUsername
 Fleet Commander
+Corporation Leader
 ```
 
 **Note**: Lines starting with `#` are comments and ignored. Empty lines are also ignored.
@@ -137,7 +140,7 @@ Currently set to 2 minutes. To change, modify:
 eve.giveaway/
 ├── main.py              # Main application
 ├── requirements.txt     # Python dependencies
-├── admins.txt          # Admin user configuration
+├── admins.template.txt  # Admin configuration template
 ├── README.md           # This file
 └── run.bat             # Windows batch file
 ```

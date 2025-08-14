@@ -1,0 +1,17 @@
+# EVE Giveaway Tool - Admin Users Template
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to 'admins.txt'
+# 2. Replace the example usernames with your actual admin usernames
+# 3. Add one username per line
+# 4. Lines starting with # are comments and ignored
+# 5. Empty lines are ignored
+#
+# EXAMPLE:
+# YourUsername
+# Fleet Commander
+# Corporation Leader
+#
+# Add your admin usernames below:
+YourUsername
+YourOtherAdminName
