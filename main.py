@@ -381,11 +381,27 @@ class GameManager:
         self.gui.update_game_status(status)
     
     def is_admin(self, username):
-        # Add your admin usernames here
-        # You can add multiple usernames separated by commas
-        # Example: {'Name', 'Fleet Commander', 'YourOtherAdminName'}
-        admin_list = {'YourName', 'yourName'}
-        return username in admin_list
+        """Check if username is in admin list by reading from admins.txt file"""
+        try:
+            admin_list = set()
+            # Read admin list from external file
+            if os.path.exists('admins.txt'):
+                with open('admins.txt', 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if line and not line.startswith('#'):
+                            admin_list.add(line)
+            else:
+                # Fallback to default admin if file doesn't exist
+                print("Warning: admins.txt not found, using default admin list")
+                admin_list = {'Hamilton Norris'}
+            
+            return username in admin_list
+        except Exception as e:
+            print(f"Error reading admin list: {e}")
+            # Fallback to default admin if there's an error
+            return username == 'Hamilton Norris'
     
     def start_game_timer(self):
         """Start a timer that will automatically end the game after 5 minutes"""

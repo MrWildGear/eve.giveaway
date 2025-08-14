@@ -115,10 +115,15 @@ The tool automatically monitors: `~/Documents/EVE/logs/Chatlogs/`
 ## 🔧 Configuration
 
 ### Admin Users
-Edit the `admin_list` in `main.py`:
-```python
-admin_list = {'Hamilton Norris', 'YourOtherAdminName'}
+Edit the `admins.txt` file to add or remove admin users:
+```txt
+# Add one username per line
+Hamilton Norris
+YourOtherAdminName
+Fleet Commander
 ```
+
+**Note**: Lines starting with `#` are comments and ignored. Empty lines are also ignored.
 
 ### Game Duration
 Currently set to 2 minutes. To change, modify:
@@ -132,6 +137,7 @@ Currently set to 2 minutes. To change, modify:
 eve.giveaway/
 ├── main.py              # Main application
 ├── requirements.txt     # Python dependencies
+├── admins.txt          # Admin user configuration
 ├── README.md           # This file
 └── run.bat             # Windows batch file
 ```
