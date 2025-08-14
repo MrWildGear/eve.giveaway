@@ -47,7 +47,9 @@ logs/
 
 # EVE Online logs (don't include actual chat logs)
 EVE/
-*.txt
+# Exclude EVE log files but allow requirements.txt
+Fleet_*.txt
+Chatlogs/*.txt
 
 # Temporary files
 *.tmp
