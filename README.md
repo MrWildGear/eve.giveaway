@@ -118,7 +118,6 @@ The tool automatically monitors: `~/Documents/EVE/logs/Chatlogs/`
 Edit the `admins.txt` file to add or remove admin users:
 ```txt
 # Add one username per line
-Hamilton Norris
 YourOtherAdminName
 Fleet Commander
 ```
