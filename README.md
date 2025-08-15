@@ -56,11 +56,14 @@ A real-time giveaway and game management tool for EVE Online fleet operations. A
 
 ### Quick Start
 1. **Clone/Download** the project files
-2. **Install Dependencies**:
+2. **Automatic Setup** (Recommended):
+   - Double-click `setup.bat` for complete installation
+   - Or double-click `install.bat` for basic installation
+3. **Manual Setup**:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Run the Tool**:
+4. **Run the Tool**:
    ```bash
    python main.py
    ```
@@ -141,8 +144,10 @@ eve.giveaway/
 ├── main.py              # Main application
 ├── requirements.txt     # Python dependencies
 ├── admins.template.txt  # Admin configuration template
-├── README.md           # This file
-└── run.bat             # Windows batch file
+├── setup.bat           # Complete setup installer (recommended)
+├── install.bat         # Basic dependency installer
+├── run.bat             # Windows launcher
+└── README.md           # This file
 ```
 
 ## 🐛 Troubleshooting
