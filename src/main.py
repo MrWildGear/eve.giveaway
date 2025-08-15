@@ -128,8 +128,11 @@ class GameManager:
         self.admin_users = set()  # Add admin usernames here
         
     def start_pir_game(self, admin_name, command):
+        print(f"DEBUG: PIR game command from {admin_name}, checking admin status...")
         if not self.is_admin(admin_name):
+            print(f"DEBUG: {admin_name} is NOT an admin, command rejected")
             return
+        print(f"DEBUG: {admin_name} is confirmed admin, starting PIR game")
             
         try:
             # Handle case-insensitive command parsing using regex
@@ -161,8 +164,11 @@ class GameManager:
             print(f"Error starting PIR game: {e}")
     
     def start_gtn_game(self, admin_name, command):
+        print(f"DEBUG: GTN game command from {admin_name}, checking admin status...")
         if not self.is_admin(admin_name):
+            print(f"DEBUG: {admin_name} is NOT an admin, command rejected")
             return
+        print(f"DEBUG: {admin_name} is confirmed admin, starting GTN game")
             
         try:
             # Handle case-insensitive command parsing using regex
@@ -251,8 +257,14 @@ class GameManager:
             print(f"Error processing entry: {e}")
     
     def stop_game(self, admin_name):
-        if not self.is_admin(admin_name) or not self.current_game:
+        print(f"DEBUG: Stop game command from {admin_name}, checking admin status...")
+        if not self.is_admin(admin_name):
+            print(f"DEBUG: {admin_name} is NOT an admin, command rejected")
             return
+        if not self.current_game:
+            print(f"DEBUG: No active game to stop")
+            return
+        print(f"DEBUG: {admin_name} is confirmed admin, stopping game")
             
         print(f"DEBUG: Stopping game. Type: {self.current_game['type']}, Target: {self.current_game['target']}")
         print(f"DEBUG: Participants: {self.current_game['participants']}")
@@ -276,8 +288,11 @@ class GameManager:
         self.current_game['active'] = False
     
     def clear_game(self, admin_name):
+        print(f"DEBUG: Clear game command from {admin_name}, checking admin status...")
         if not self.is_admin(admin_name):
+            print(f"DEBUG: {admin_name} is NOT an admin, command rejected")
             return
+        print(f"DEBUG: {admin_name} is confirmed admin, clearing game")
             
         self.current_game = None
         self.gui.clear_participants()
@@ -355,8 +370,11 @@ class GameManager:
         return None
     
     def show_status(self, admin_name):
+        print(f"DEBUG: Status command from {admin_name}, checking admin status...")
         if not self.is_admin(admin_name):
+            print(f"DEBUG: {admin_name} is NOT an admin, command rejected")
             return
+        print(f"DEBUG: {admin_name} is confirmed admin, showing status")
             
         if not self.current_game:
             self.gui.update_game_status("📊 No active game. Use !PIR or !GTN to start one!")
@@ -384,24 +402,42 @@ class GameManager:
         """Check if username is in admin list by reading from admins.txt file"""
         try:
             admin_list = set()
-            # Read admin list from external file
-            if os.path.exists('admins.txt'):
-                with open('admins.txt', 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        # Skip empty lines and comments
-                        if line and not line.startswith('#'):
-                            admin_list.add(line)
-            else:
-                # Fallback to default admin if file doesn't exist
-                print("Warning: admins.txt not found, using default admin list")
-                admin_list = {'Hamilton Norris'}
+            # Try multiple possible locations for admins.txt
+            possible_paths = [
+                'admins.txt',  # Current directory
+                os.path.join(os.path.dirname(__file__), 'admins.txt'),  # Same directory as script
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'admins.txt'),  # Parent directory
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'admins.txt')  # Grandparent directory
+            ]
+            
+            admin_file_found = False
+            for admin_path in possible_paths:
+                if os.path.exists(admin_path):
+                    try:
+                        with open(admin_path, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                line = line.strip()
+                                # Skip empty lines and comments
+                                if line and not line.startswith('#'):
+                                    admin_list.add(line)
+                        admin_file_found = True
+                        print(f"DEBUG: Loaded admin list from: {admin_path}")
+                        print(f"DEBUG: Admin users: {admin_list}")
+                        break
+                    except Exception as e:
+                        print(f"Warning: Could not read {admin_path}: {e}")
+                        continue
+            
+            if not admin_file_found:
+                # No admin file found - no admins will be available
+                print("Warning: admins.txt not found in any location. No admin users will be available.")
+                admin_list = set()
             
             return username in admin_list
         except Exception as e:
             print(f"Error reading admin list: {e}")
-            # Fallback to default admin if there's an error
-            return username == 'Hamilton Norris'
+            # If there's an error reading the admin list, no admins will be available
+            return False
     
     def start_game_timer(self):
         """Start a timer that will automatically end the game after 5 minutes"""
