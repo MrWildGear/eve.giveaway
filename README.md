@@ -147,10 +147,35 @@ eve.giveaway/
 ├── setup.bat           # Complete setup installer (recommended)
 ├── install.bat         # Basic dependency installer
 ├── run.bat             # Windows launcher
+├── diagnose.bat        # System diagnostics tool
+├── test_gui.py         # Minimal GUI test
 └── README.md           # This file
 ```
 
 ## 🐛 Troubleshooting
+
+### White Screen / GUI Not Loading
+If you see a white screen or the application doesn't load properly:
+
+1. **Run the diagnostic tool**:
+   - Double-click `diagnose.bat` to check your system
+   - This will test Python, tkinter, and basic GUI functionality
+
+2. **Test basic GUI**:
+   - Run `python test_gui.py` to test minimal GUI functionality
+   - If this works, the main app should work too
+
+3. **Common causes**:
+   - **Missing tkinter**: Python installed without GUI support
+   - **Display drivers**: Outdated or incompatible graphics drivers
+   - **Windows theme**: Dark/light mode conflicts
+   - **Python version**: Incompatible Python installation
+
+4. **Solutions**:
+   - Reinstall Python with "Add to PATH" and "tcl/tk and IDLE" options
+   - Update graphics drivers
+   - Try running as administrator
+   - Check Windows display scaling settings
 
 ### Chat Not Detected
 - Verify EVE Online is saving chat logs

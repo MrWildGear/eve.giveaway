@@ -436,25 +436,50 @@ class GameManager:
 
 class EVEGiveawayGUI:
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("EVE Online Giveaway Tool")
-        
-        # Load saved window size and position
-        self.load_window_settings()
-        
-        # Game manager
-        self.game_manager = GameManager(self)
-        
-        # Chat monitor
-        self.chat_monitor = EVEChatMonitor(self.game_manager)
-        self.observer = None
-        
-        self.setup_gui()
-        self.start_monitoring()
-        
-        # Bind window close event to save settings
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
+        try:
+            self.root = tk.Tk()
+            self.root.title("EVE Online Giveaway Tool")
+            
+            # Set a minimum window size to prevent layout issues
+            self.root.minsize(800, 600)
+            
+            # Load saved window size and position
+            self.load_window_settings()
+            
+            # Game manager
+            self.game_manager = GameManager(self)
+            
+            # Chat monitor
+            self.chat_monitor = EVEChatMonitor(self.game_manager)
+            self.observer = None
+            
+            # Setup GUI with error handling
+            try:
+                self.setup_gui()
+            except Exception as e:
+                print(f"Error setting up GUI: {e}")
+                # Fallback to basic GUI if styling fails
+                self.setup_basic_gui()
+            
+            self.start_monitoring()
+            
+            # Bind window close event to save settings
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            
+            # Ensure the window is visible and focused
+            self.root.lift()
+            self.root.focus_force()
+            
+        except Exception as e:
+            print(f"Critical error initializing GUI: {e}")
+            # Show error message and exit gracefully
+            if 'self.root' in locals():
+                messagebox.showerror("Error", f"Failed to initialize GUI: {e}")
+                self.root.destroy()
+            else:
+                print("Could not create root window")
+            raise
+    
     def setup_gui(self):
         # Apply dark mode styling
         self.apply_dark_mode()
@@ -567,6 +592,117 @@ class EVEGiveawayGUI:
         instructions_frame.columnconfigure(0, weight=1)
         instructions_frame.rowconfigure(1, weight=1)  # Content frame gets the weight
         
+    def setup_basic_gui(self):
+        """Fallback GUI setup in case dark mode styling fails"""
+        print("Applying basic GUI setup due to dark mode styling error.")
+        # Main frame
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(1, weight=1)  # Game Status gets weight
+        main_frame.rowconfigure(2, weight=1)  # Participants gets weight
+        main_frame.rowconfigure(3, weight=0)  # Instructions doesn't need weight
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="🎮 EVE Online Giveaway Tool", font=("Arial", 18, "bold"))
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        
+        # Game status
+        status_frame = ttk.LabelFrame(main_frame, text="🎯 Game Status", padding="10")
+        status_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 20))
+        
+        self.status_text = tk.Text(status_frame, height=6, width=90, font=("Consolas", 10), 
+                                  bg="#2b2b2b", fg="white", insertbackground="white")
+        self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Countdown timer display
+        self.countdown_label = ttk.Label(status_frame, text="⏰ No active game", font=("Arial", 12, "bold"), foreground="white")
+        self.countdown_label.grid(row=1, column=0, pady=(5, 0))
+        
+        # Participants
+        participants_frame = ttk.LabelFrame(main_frame, text="👥 Participants", padding="10")
+        participants_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Treeview for participants with sorting
+        columns = ('Username', 'Guess', 'Time')
+        self.participants_tree = ttk.Treeview(participants_frame, columns=columns, show='headings', height=12)
+        
+        # Store sort direction for each column
+        self.sort_directions = {'Username': False, 'Guess': False, 'Time': False}
+        
+        for col in columns:
+            self.participants_tree.heading(col, text=col, 
+                                         command=lambda c=col: self.sort_column(c))
+            self.participants_tree.column(col, width=200)
+        
+        self.participants_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Scrollbar for participants
+        participants_scrollbar = ttk.Scrollbar(participants_frame, orient=tk.VERTICAL, command=self.participants_tree.yview)
+        participants_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.participants_tree.configure(yscrollcommand=participants_scrollbar.set)
+        
+        # Instructions (collapsible)
+        instructions_frame = ttk.LabelFrame(main_frame, text="📖 How to Use", padding="10")
+        instructions_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        # Collapse/expand button for instructions
+        self.instructions_collapsed = False
+        instructions_toggle_btn = ttk.Button(instructions_frame, text="🔽 Hide", command=lambda: self.toggle_section("instructions"))
+        instructions_toggle_btn.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        # Instructions content frame
+        self.instructions_content_frame = ttk.Frame(instructions_frame)
+        self.instructions_content_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        instructions = """🎮 ADMIN COMMANDS (use !) - Case Insensitive:
+• !PIR min-max - Start Price is Right game (closest without going over)
+  Example: !PIR 1-100, !pir 0-1000, !Pir 50-500
+• !GTN min-max - Start Guess the Number game (exact match)
+  Example: !GTN 1-100, !gtn 0-1000, !Gtn 50-500
+• !stop - End current game and select winner
+• !status - Show game status and time remaining
+• !clear - Clear current game
+
+🎯 PLAYER COMMANDS (use ?):
+• ?number - Enter current game with number
+  Example: ?50, ?100, ? 500 (space works too)
+
+🏆 GAME RULES:
+• Price is Right: Closest guess ≤ target wins
+• Guess the Number: Exact match wins
+• Multiple winners split prize if tied
+• Games auto-end after 2 minutes
+• Players can only enter once per game
+
+⚙️ ADMIN SETUP:
+• Edit admins.txt to add/remove admin users
+• One username per line, # for comments
+
+🔍 The tool automatically monitors EVE chat logs and updates in real-time."""
+        
+        # Make instructions copyable using Text widget
+        self.instructions_text = tk.Text(self.instructions_content_frame, height=8, width=90, font=("Consolas", 10),
+                                        bg="#2b2b2b", fg="white", insertbackground="white", wrap=tk.WORD)
+        self.instructions_text.insert(tk.END, instructions)
+        self.instructions_text.config(state=tk.DISABLED)  # Read-only but copyable
+        self.instructions_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure frame weights
+        status_frame.columnconfigure(0, weight=1)
+        status_frame.rowconfigure(0, weight=1)
+        status_frame.rowconfigure(1, weight=0)  # Countdown label doesn't need weight
+        participants_frame.columnconfigure(0, weight=1)
+        participants_frame.columnconfigure(1, weight=0)  # Scrollbar doesn't need weight
+        participants_frame.rowconfigure(0, weight=1)
+        instructions_frame.columnconfigure(0, weight=1)
+        instructions_frame.rowconfigure(1, weight=1)  # Content frame gets the weight
+    
     def start_monitoring(self):
         eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
         
@@ -640,40 +776,61 @@ class EVEGiveawayGUI:
     
     def apply_dark_mode(self):
         """Apply dark mode styling to the application"""
-        # Configure ttk styles for dark mode
-        style = ttk.Style()
-        
-        # Configure the root window
-        self.root.configure(bg="#1e1e1e")
-        
-        # Configure ttk styles
-        style.theme_use('clam')  # Use clam theme as base
-        
-        # Configure frame styles
-        style.configure('TFrame', background='#1e1e1e')
-        style.configure('TLabelframe', background='#1e1e1e', foreground='white')
-        style.configure('TLabelframe.Label', background='#1e1e1e', foreground='white')
-        
-        # Configure label styles
-        style.configure('TLabel', background='#1e1e1e', foreground='white')
-        
-        # Configure button styles
-        style.configure('TButton', background='#404040', foreground='white')
-        style.map('TButton', 
-                 background=[('active', '#505050'), ('pressed', '#303030')],
-                 foreground=[('active', 'white'), ('pressed', 'white')])
-        
-        # Configure treeview styles
-        style.configure('Treeview', background='#2b2b2b', foreground='white', fieldbackground='#2b2b2b')
-        style.configure('Treeview.Heading', background='#404040', foreground='white')
-        style.map('Treeview', 
-                 background=[('selected', '#505050')],
-                 foreground=[('selected', 'white')])
-        
-        # Configure scrollbar styles
-        style.configure('Vertical.TScrollbar', background='#404040', troughcolor='#2b2b2b')
-        style.map('Vertical.TScrollbar', 
-                 background=[('active', '#505050'), ('pressed', '#303030')])
+        try:
+            # Configure ttk styles for dark mode
+            style = ttk.Style()
+            
+            # Try to use clam theme, fallback to default if not available
+            try:
+                style.theme_use('clam')  # Use clam theme as base
+            except Exception as e:
+                print(f"Warning: 'clam' theme not available: {e}")
+            
+            # Configure the root window
+            try:
+                self.root.configure(bg="#1e1e1e")
+            except Exception as e:
+                print(f"Warning: Could not set root background: {e}")
+            
+            # Configure frame styles with error handling
+            try:
+                style.configure('TFrame', background='#1e1e1e')
+                style.configure('TLabelframe', background='#1e1e1e', foreground='white')
+                style.configure('TLabelframe.Label', background='#1e1e1e', foreground='white')
+                style.configure('TLabel', background='#1e1e1e', foreground='white')
+            except Exception as e:
+                print(f"Warning: Could not configure frame/label styles: {e}")
+            
+            # Configure button styles with error handling
+            try:
+                style.configure('TButton', background='#404040', foreground='white')
+                style.map('TButton', 
+                         background=[('active', '#505050'), ('pressed', '#303030')],
+                         foreground=[('active', 'white'), ('pressed', 'white')])
+            except Exception as e:
+                print(f"Warning: Could not configure button styles: {e}")
+            
+            # Configure treeview styles with error handling
+            try:
+                style.configure('Treeview', background='#2b2b2b', foreground='white', fieldbackground='#2b2b2b')
+                style.configure('Treeview.Heading', background='#404040', foreground='white')
+                style.map('Treeview', 
+                         background=[('selected', '#505050')],
+                         foreground=[('selected', 'white')])
+            except Exception as e:
+                print(f"Warning: Could not configure treeview styles: {e}")
+            
+            # Configure scrollbar styles with error handling
+            try:
+                style.configure('Vertical.TScrollbar', background='#404040', troughcolor='#2b2b2b')
+                style.map('Vertical.TScrollbar', 
+                         background=[('active', '#505050'), ('pressed', '#303030')])
+            except Exception as e:
+                print(f"Warning: Could not configure scrollbar styles: {e}")
+                
+        except Exception as e:
+            print(f"Warning: Could not apply dark mode styling: {e}")
+            print("Using default system styling instead.")
     
     def sort_column(self, column):
         """Sort the participants tree by the specified column"""
