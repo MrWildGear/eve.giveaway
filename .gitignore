@@ -58,3 +58,9 @@ Chatlogs/*.txt
 # Temporary files
 *.tmp
 *.temp
+
+# Archive files (compressed packages)
+*.rar
+*.zip
+*.7z
+*.tar.gz
