@@ -142,8 +142,13 @@ To create a standalone `.exe` file that doesn't require Python:
 3. **Format**: One username per line, `#` for comments
 
 ```txt
+<<<<<<< HEAD
 # Example admins.txt content:
 YourUsername
+=======
+# Add one username per line
+YourOtherAdminName
+>>>>>>> 397e309ac4f64f9b6491de52ddfdf7e26a528ede
 Fleet Commander
 Corporation Leader
 ```
