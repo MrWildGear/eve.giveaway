@@ -167,13 +167,15 @@ Currently set to 2 minutes. To change, modify:
 eve.giveaway/
 ├── src/                 # Source code folder
 │   ├── main.py         # Main application
-│   └── test_gui.py     # Minimal GUI test
+│   └── admins.template.txt  # Admin configuration template
 ├── requirements.txt     # Python dependencies
 ├── admins.template.txt  # Admin configuration template
 ├── setup.bat           # Complete setup installer (recommended)
 ├── install.bat         # Basic dependency installer
 ├── run.bat             # Windows launcher
 ├── build_exe.bat       # Build standalone executable
+├── build_exe.ps1       # PowerShell build script (recommended)
+├── BUILD_SECURITY.md   # Build security guide
 ├── diagnose.bat        # System diagnostics tool
 └── README.md           # This file
 ```
@@ -188,8 +190,8 @@ If you see a white screen or the application doesn't load properly:
    - This will test Python, tkinter, and basic GUI functionality
 
 2. **Test basic GUI**:
-   - Run `python src\test_gui.py` to test minimal GUI functionality
-   - If this works, the main app should work too
+   - Run `python src\main.py` to test the main application
+   - If this works, the executable should work too
 
 3. **Common causes**:
    - **Missing tkinter**: Python installed without GUI support

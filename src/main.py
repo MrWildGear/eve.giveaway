@@ -9,11 +9,78 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import threading
 import json
+import configparser
+
+class ConfigManager:
+    """Manages application configuration from config.txt file"""
+    
+    def __init__(self):
+        self.config = configparser.ConfigParser()
+        self.config_file = 'config.txt'
+        self.load_config()
+    
+    def load_config(self):
+        """Load configuration from config.txt file"""
+        try:
+            if os.path.exists(self.config_file):
+                # Read as regular text file since it's not standard INI format
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                # Parse the custom format
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        if key == 'EVE_LOGS_PATH':
+                            self.eve_logs_path = value if value else None
+                        elif key == 'GAME_TIMER_MINUTES':
+                            try:
+                                self.game_timer_minutes = int(value)
+                            except ValueError:
+                                self.game_timer_minutes = 2
+                        elif key == 'DEBUG_MODE':
+                            self.debug_mode = value.lower() == 'true'
+                        else:
+                            # Store other config values
+                            if not hasattr(self, 'other_config'):
+                                self.other_config = {}
+                            self.other_config[key] = value
+            else:
+                # Default values if no config file
+                self.eve_logs_path = None
+                self.game_timer_minutes = 2
+                self.debug_mode = False
+                
+        except Exception as e:
+            print(f"Warning: Could not load config file: {e}")
+            # Fallback to defaults
+            self.eve_logs_path = None
+            self.game_timer_minutes = 2
+            self.debug_mode = False
+    
+    def get_eve_logs_path(self):
+        """Get the configured EVE logs path or None for auto-detection"""
+        return self.eve_logs_path
+    
+    def get_game_timer_minutes(self):
+        """Get the configured game timer duration in minutes"""
+        return self.game_timer_minutes
+    
+    def is_debug_mode(self):
+        """Check if debug mode is enabled"""
+        return self.debug_mode
 
 class EVEChatMonitor(FileSystemEventHandler):
-    def __init__(self, game_manager):
+    def __init__(self, game_manager, eve_logs_path=None):
         self.game_manager = game_manager
-        self.eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
+        if eve_logs_path:
+            self.eve_logs_path = eve_logs_path
+        else:
+            self.eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
         self.current_files = {}
         
     def on_modified(self, event):
@@ -121,8 +188,9 @@ class EVEChatMonitor(FileSystemEventHandler):
             print(f"DEBUG: Message did not match pattern: '{message}'")
 
 class GameManager:
-    def __init__(self, gui):
+    def __init__(self, gui, config_manager=None):
         self.gui = gui
+        self.config_manager = config_manager
         self.current_game = None
         self.participants = {}
         self.admin_users = set()  # Add admin usernames here
@@ -149,7 +217,7 @@ class GameManager:
                     'range': f"{min_val}-{max_val}",
                     'target': target,
                     'start_time': datetime.now(),
-                    'end_time': datetime.now() + timedelta(minutes=2),
+                    'end_time': datetime.now() + timedelta(minutes=self.game_manager.config_manager.get_game_timer_minutes()),
                     'participants': {},
                     'active': True
                 }
@@ -185,7 +253,7 @@ class GameManager:
                     'range': f"{min_val}-{max_val}",
                     'target': target,
                     'start_time': datetime.now(),
-                    'end_time': datetime.now() + timedelta(minutes=2),
+                    'end_time': datetime.now() + timedelta(minutes=self.game_manager.config_manager.get_game_timer_minutes()),
                     'participants': {},
                     'active': True
                 }
@@ -482,11 +550,15 @@ class EVEGiveawayGUI:
             # Load saved window size and position
             self.load_window_settings()
             
+            # Configuration manager
+            self.config_manager = ConfigManager()
+            
             # Game manager
-            self.game_manager = GameManager(self)
+            self.game_manager = GameManager(self, self.config_manager)
             
             # Chat monitor
-            self.chat_monitor = EVEChatMonitor(self.game_manager)
+            chat_monitor_path = self.config_manager.get_eve_logs_path()
+            self.chat_monitor = EVEChatMonitor(self.game_manager, chat_monitor_path)
             self.observer = None
             
             # Setup GUI with error handling
@@ -541,13 +613,21 @@ class EVEGiveawayGUI:
         status_frame = ttk.LabelFrame(main_frame, text="🎯 Game Status", padding="10")
         status_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 20))
         
+        # Add settings button to status frame
+        status_header = ttk.Frame(status_frame)
+        status_header.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        settings_btn = ttk.Button(status_header, text="⚙️ Settings", command=self.show_settings)
+        settings_btn.grid(row=0, column=1, sticky=tk.E)
+        
+        # Status text below the header
         self.status_text = tk.Text(status_frame, height=6, width=90, font=("Consolas", 10), 
                                   bg="#2b2b2b", fg="white", insertbackground="white")
-        self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.status_text.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Countdown timer display
         self.countdown_label = ttk.Label(status_frame, text="⏰ No active game", font=("Arial", 12, "bold"), foreground="white")
-        self.countdown_label.grid(row=1, column=0, pady=(5, 0))
+        self.countdown_label.grid(row=2, column=0, pady=(5, 0))
         
         # Participants
         participants_frame = ttk.LabelFrame(main_frame, text="👥 Participants", padding="10")
@@ -652,13 +732,21 @@ class EVEGiveawayGUI:
         status_frame = ttk.LabelFrame(main_frame, text="🎯 Game Status", padding="10")
         status_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 20))
         
+        # Add settings button to status frame
+        status_header = ttk.Frame(status_frame)
+        status_header.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        settings_btn = ttk.Button(status_header, text="⚙️ Settings", command=self.show_settings)
+        settings_btn.grid(row=0, column=1, sticky=tk.E)
+        
+        # Status text below the header
         self.status_text = tk.Text(status_frame, height=6, width=90, font=("Consolas", 10), 
                                   bg="#2b2b2b", fg="white", insertbackground="white")
-        self.status_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.status_text.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Countdown timer display
         self.countdown_label = ttk.Label(status_frame, text="⏰ No active game", font=("Arial", 12, "bold"), foreground="white")
-        self.countdown_label.grid(row=1, column=0, pady=(5, 0))
+        self.countdown_label.grid(row=2, column=0, pady=(5, 0))
         
         # Participants
         participants_frame = ttk.LabelFrame(main_frame, text="👥 Participants", padding="10")
@@ -740,7 +828,10 @@ class EVEGiveawayGUI:
         instructions_frame.rowconfigure(1, weight=1)  # Content frame gets the weight
     
     def start_monitoring(self):
-        eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
+        # Use configured path or fallback to default
+        eve_logs_path = self.config_manager.get_eve_logs_path()
+        if not eve_logs_path:
+            eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
         
         if os.path.exists(eve_logs_path):
             self.observer = Observer()
@@ -789,6 +880,165 @@ class EVEGiveawayGUI:
         # Start countdown in a separate thread
         countdown_thread = threading.Thread(target=countdown_update, daemon=True)
         countdown_thread.start()
+    
+    def show_settings(self):
+        """Show settings dialog for configuring EVE logs path and other options"""
+        settings_window = tk.Toplevel(self.root)
+        settings_window.title("⚙️ Settings")
+        settings_window.geometry("600x500")
+        settings_window.resizable(False, False)
+        settings_window.transient(self.root)
+        settings_window.grab_set()
+        
+        # Apply dark mode to settings window
+        self.apply_dark_mode_to_window(settings_window)
+        
+        # Center the window
+        settings_window.geometry("+%d+%d" % (self.root.winfo_rootx() + 50, self.root.winfo_rooty() + 50))
+        
+        # Main frame
+        main_frame = ttk.Frame(settings_window, padding="30")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="⚙️ EVE Giveaway Tool Settings", font=("Arial", 16, "bold"))
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 10))
+        
+        # EVE Logs Path
+        path_frame = ttk.LabelFrame(main_frame, text="📁 EVE Chat Logs Path", padding="10")
+        path_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Label(path_frame, text="Path to EVE Online chat logs folder:").grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        self.path_var = tk.StringVar(value=self.config_manager.get_eve_logs_path() or "")
+        path_entry = ttk.Entry(path_frame, textvariable=self.path_var, width=50)
+        path_entry.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        
+        browse_btn = ttk.Button(path_frame, text="Browse...", command=self.browse_eve_logs_path)
+        browse_btn.grid(row=1, column=1, padx=(10, 0))
+        
+        ttk.Label(path_frame, text="Leave empty to use automatic detection", font=("Arial", 9)).grid(row=2, column=0, sticky=tk.W)
+        
+        # Game Timer
+        timer_frame = ttk.LabelFrame(main_frame, text="⏰ Game Timer", padding="10")
+        timer_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Label(timer_frame, text="Game duration in minutes:").grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        self.timer_var = tk.StringVar(value=str(self.config_manager.get_game_timer_minutes()))
+        timer_entry = ttk.Entry(timer_frame, textvariable=self.timer_var, width=10)
+        timer_entry.grid(row=1, column=0, sticky=tk.W)
+        
+        # Debug Mode
+        debug_frame = ttk.LabelFrame(main_frame, text="🐛 Debug Mode", padding="10")
+        debug_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        self.debug_var = tk.BooleanVar(value=self.config_manager.is_debug_mode())
+        debug_check = ttk.Checkbutton(debug_frame, text="Enable debug output", variable=self.debug_var)
+        debug_check.grid(row=0, column=0, sticky=tk.W)
+        
+        # Buttons - Make sure they're visible and properly styled
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=(0, 10), sticky=(tk.W, tk.E))
+        
+        # Save button - Make it more prominent and ensure it's visible
+        save_btn = tk.Button(button_frame, text="💾 Save Settings", command=lambda: self.save_settings(settings_window), 
+                           bg="#4CAF50", fg="white", font=("Arial", 12, "bold"), 
+                           relief=tk.RAISED, bd=3, padx=20, pady=10)
+        save_btn.grid(row=0, column=0, padx=(0, 10), sticky=tk.W)
+        
+        cancel_btn = tk.Button(button_frame, text="❌ Cancel", command=settings_window.destroy,
+                             bg="#f44336", fg="white", font=("Arial", 12, "bold"),
+                             relief=tk.RAISED, bd=3, padx=20, pady=10)
+        cancel_btn.grid(row=0, column=1, sticky=tk.E)
+        
+        # Configure button frame columns to expand properly
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+        
+        # Force the buttons to be visible by updating the window
+        settings_window.update()
+        
+        # Configure grid weights
+        settings_window.columnconfigure(0, weight=1)
+        settings_window.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+        path_frame.columnconfigure(0, weight=1)
+        
+        # Apply dark mode styling to specific widgets after creation
+        self.apply_dark_mode_to_settings_widgets(settings_window)
+        
+        # Force update to ensure buttons are visible
+        settings_window.update_idletasks()
+    
+    def browse_eve_logs_path(self):
+        """Browse for EVE logs directory"""
+        from tkinter import filedialog
+        directory = filedialog.askdirectory(title="Select EVE Chat Logs Folder")
+        if directory:
+            self.path_var.set(directory)
+    
+    def save_settings(self, settings_window):
+        """Save settings to config.txt file"""
+        try:
+            # Validate inputs
+            timer_value = self.timer_var.get().strip()
+            if not timer_value.isdigit() or int(timer_value) < 1:
+                from tkinter import messagebox
+                messagebox.showerror("Invalid Input", "Game timer must be a positive number!")
+                return
+            
+            # Read existing config or create new
+            config_lines = []
+            if os.path.exists('config.txt'):
+                with open('config.txt', 'r', encoding='utf-8') as f:
+                    config_lines = f.readlines()
+            
+            # Update or add settings
+            new_lines = []
+            settings_updated = {'EVE_LOGS_PATH': False, 'GAME_TIMER_MINUTES': False, 'DEBUG_MODE': False}
+            
+            for line in config_lines:
+                if line.startswith('EVE_LOGS_PATH='):
+                    new_lines.append(f"EVE_LOGS_PATH={self.path_var.get()}\n")
+                    settings_updated['EVE_LOGS_PATH'] = True
+                elif line.startswith('GAME_TIMER_MINUTES='):
+                    new_lines.append(f"GAME_TIMER_MINUTES={timer_value}\n")
+                    settings_updated['GAME_TIMER_MINUTES'] = True
+                elif line.startswith('DEBUG_MODE='):
+                    new_lines.append(f"DEBUG_MODE={str(self.debug_var.get()).lower()}\n")
+                    settings_updated['DEBUG_MODE'] = True
+                else:
+                    new_lines.append(line)
+            
+            # Add new settings if they didn't exist
+            if not settings_updated['EVE_LOGS_PATH']:
+                new_lines.append(f"EVE_LOGS_PATH={self.path_var.get()}\n")
+            if not settings_updated['GAME_TIMER_MINUTES']:
+                new_lines.append(f"GAME_TIMER_MINUTES={timer_value}\n")
+            if not settings_updated['DEBUG_MODE']:
+                new_lines.append(f"DEBUG_MODE={str(self.debug_var.get()).lower()}\n")
+            
+            # Write updated config
+            with open('config.txt', 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+            
+            # Reload config
+            self.config_manager.load_config()
+            
+            # Show success message
+            from tkinter import messagebox
+            messagebox.showinfo("Settings Saved", "Settings have been saved successfully!\n\nYou may need to restart the application for some changes to take effect.")
+            
+            # Close the settings window
+            settings_window.destroy()
+            
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Error", f"Failed to save settings: {e}")
+            print(f"Error saving settings: {e}")
+            import traceback
+            traceback.print_exc()
     
     def toggle_section(self, section):
         """Toggle the visibility of a section (collapse/expand)"""
@@ -863,10 +1113,137 @@ class EVEGiveawayGUI:
                          background=[('active', '#505050'), ('pressed', '#303030')])
             except Exception as e:
                 print(f"Warning: Could not configure scrollbar styles: {e}")
+            
+            # Configure additional dark mode styles for settings window
+            try:
+                style.configure('Dark.TLabelframe', background='#1e1e1e', foreground='white')
+                style.configure('Dark.TLabelframe.Label', background='#1e1e1e', foreground='white')
+                style.configure('Dark.TLabel', background='#1e1e1e', foreground='white')
+                style.configure('Dark.TButton', background='#404040', foreground='white')
+                style.configure('Dark.TEntry', fieldbackground='#2b2b2b', foreground='white', insertbackground='white')
+                style.configure('Dark.TCheckbutton', background='#1e1e1e', foreground='white')
+                
+                # Force Entry widget styling
+                style.map('Dark.TEntry',
+                         fieldbackground=[('readonly', '#2b2b2b'), ('focus', '#2b2b2b')],
+                         foreground=[('readonly', 'white'), ('focus', 'white')])
+                
+                # Force Button widget styling
+                style.map('Dark.TButton',
+                         background=[('active', '#505050'), ('pressed', '#303030')],
+                         foreground=[('active', 'white'), ('pressed', 'white')])
+                
+            except Exception as e:
+                print(f"Warning: Could not configure dark mode styles: {e}")
                 
         except Exception as e:
             print(f"Warning: Could not apply dark mode styling: {e}")
             print("Using default system styling instead.")
+    
+    def apply_dark_mode_to_window(self, window):
+        """Apply dark mode styling to a specific window (like settings)"""
+        try:
+            # Configure the window background
+            try:
+                window.configure(bg="#1e1e1e")
+            except Exception as e:
+                print(f"Warning: Could not set window background: {e}")
+            
+            # Apply dark mode to all child widgets recursively
+            self.apply_dark_mode_to_widgets(window)
+            
+        except Exception as e:
+            print(f"Warning: Could not apply dark mode to window: {e}")
+    
+    def apply_dark_mode_to_widgets(self, parent):
+        """Recursively apply dark mode to all child widgets"""
+        try:
+            for child in parent.winfo_children():
+                try:
+                    # Apply dark mode based on widget type
+                    if isinstance(child, tk.Label):
+                        child.configure(bg="#1e1e1e", fg="white")
+                    elif isinstance(child, tk.Entry):
+                        child.configure(bg="#2b2b2b", fg="white", insertbackground="white")
+                    elif isinstance(child, tk.Checkbutton):
+                        child.configure(bg="#1e1e1e", fg="white", selectcolor="#404040")
+                    elif isinstance(child, tk.Button):
+                        child.configure(bg="#404040", fg="white", activebackground="#505050", activeforeground="white")
+                    elif isinstance(child, tk.Frame) or isinstance(child, ttk.Frame):
+                        child.configure(bg="#1e1e1e")
+                    elif isinstance(child, ttk.LabelFrame):
+                        child.configure(style='Dark.TLabelframe')
+                    elif isinstance(child, ttk.Label):
+                        child.configure(style='Dark.TLabel')
+                    elif isinstance(child, ttk.Button):
+                        child.configure(style='Dark.TButton')
+                    elif isinstance(child, ttk.Entry):
+                        child.configure(style='Dark.TCheckbutton')
+                except Exception as e:
+                    # Continue with other widgets if one fails
+                    pass
+                
+                # Recursively apply to children
+                self.apply_dark_mode_to_widgets(child)
+                
+        except Exception as e:
+            print(f"Warning: Could not apply dark mode to widgets: {e}")
+    
+    def apply_dark_mode_to_settings_widgets(self, settings_window):
+        """Apply dark mode specifically to settings window widgets"""
+        try:
+            # Find and style the Entry widgets specifically
+            for widget in settings_window.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, ttk.LabelFrame):
+                            for grandchild in child.winfo_children():
+                                if isinstance(grandchild, ttk.Entry):
+                                    # Force dark styling for Entry widgets
+                                    grandchild.configure(style='Dark.TEntry')
+                                    # Also try direct configuration as fallback
+                                    try:
+                                        grandchild.configure(background="#2b2b2b", foreground="white", insertbackground="white")
+                                    except:
+                                        pass
+                                elif isinstance(grandchild, ttk.Button):
+                                    grandchild.configure(style='Dark.TButton')
+                                elif isinstance(grandchild, ttk.Label):
+                                    grandchild.configure(style='Dark.TLabel')
+                                elif isinstance(grandchild, ttk.Checkbutton):
+                                    grandchild.configure(style='Dark.TCheckbutton')
+                        elif isinstance(child, ttk.Button):
+                            child.configure(style='Dark.TButton')
+                        elif isinstance(child, ttk.Label):
+                            child.configure(style='Dark.TLabel')
+            
+            # Ensure the button frame is visible
+            button_frame = None
+            for widget in settings_window.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, ttk.Frame) and len(child.winfo_children()) > 0:
+                            # Check if this is the button frame (has buttons)
+                            for grandchild in child.winfo_children():
+                                if isinstance(grandchild, ttk.Button) and "Save" in grandchild.cget("text"):
+                                    button_frame = child
+                                    break
+                            if button_frame:
+                                break
+                    if button_frame:
+                        break
+            
+            if button_frame:
+                # Make sure button frame is visible and properly styled
+                button_frame.configure(style='Dark.TFrame')
+                print("DEBUG: Button frame found and styled")
+            else:
+                print("DEBUG: Button frame not found")
+                
+        except Exception as e:
+            print(f"Warning: Could not apply dark mode to settings widgets: {e}")
+            import traceback
+            traceback.print_exc()
     
     def sort_column(self, column):
         """Sort the participants tree by the specified column"""

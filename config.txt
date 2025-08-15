@@ -1,0 +1,21 @@
+# EVE Giveaway Tool Configuration
+# 
+# INSTRUCTIONS:
+# 1. Edit the values below to match your system
+# 2. Save this file in the same folder as the .exe
+# 3. Restart the application after making changes
+#
+# EVE_LOGS_PATH: Path to your EVE Online chat logs folder
+# Examples:
+# Windows: C:\Users\YourUsername\Documents\EVE\logs\Chatlogs
+# Mac: /Users/YourUsername/Documents/EVE/logs/Chatlogs
+# Linux: /home/YourUsername/Documents/EVE/logs/Chatlogs
+#
+# Leave empty to use automatic detection
+EVE_LOGS_PATH=C:/Users/Hamilton Norris/Documents/EVE/logs/Gamelogs
+
+# GAME_TIMER_MINUTES: How long games run before auto-ending (default: 2)
+GAME_TIMER_MINUTES=2
+
+# DEBUG_MODE: Enable/disable debug output (true/false)
+DEBUG_MODE=true
