@@ -74,6 +74,25 @@ The tool automatically monitors: `~/Documents/EVE/logs/Chatlogs/`
 - Ensure EVE Online is saving chat logs
 - The tool will detect new messages in real-time
 
+### Building Standalone Executable
+To create a standalone `.exe` file that doesn't require Python:
+
+1. **Run the build script**:
+   ```bash
+   # Double-click build_exe.bat
+   # Or run: python -m PyInstaller --onefile --windowed main.py
+   ```
+
+2. **Find your executable**:
+   - Located in the `dist/` folder
+   - File: `EVE_Giveaway_Tool.exe`
+
+3. **Benefits**:
+   - No Python installation required
+   - Portable - copy to any Windows computer
+   - Professional standalone application
+   - Easy distribution to other users
+
 ## 🎮 How to Play
 
 ### Starting a Game
@@ -147,6 +166,7 @@ eve.giveaway/
 ├── setup.bat           # Complete setup installer (recommended)
 ├── install.bat         # Basic dependency installer
 ├── run.bat             # Windows launcher
+├── build_exe.bat       # Build standalone executable
 ├── diagnose.bat        # System diagnostics tool
 ├── test_gui.py         # Minimal GUI test
 └── README.md           # This file
