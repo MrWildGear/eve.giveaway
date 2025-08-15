@@ -46,6 +46,9 @@ window_settings.json
 logs/
 admins.txt
 
+# Share folder (contains executable and user files)
+EVE Giveaway Tool/
+
 # EVE Online logs (don't include actual chat logs)
 EVE/
 # Exclude EVE log files but allow requirements.txt
