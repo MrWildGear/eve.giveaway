@@ -5,5 +5,5 @@ echo Make sure you have Python installed and requirements installed:
 echo pip install -r requirements.txt
 echo.
 echo Starting the tool...
-python main.py
+python src\main.py
 pause

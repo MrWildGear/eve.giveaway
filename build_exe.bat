@@ -9,7 +9,7 @@ pip install pyinstaller
 
 echo.
 echo Building executable...
-pyinstaller --onefile --windowed --name "EVE_Giveaway_Tool" --icon=NONE main.py
+pyinstaller --onefile --windowed --name "EVE_Giveaway_Tool" --icon=NONE src\main.py
 
 echo.
 echo ========================================

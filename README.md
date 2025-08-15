@@ -65,7 +65,7 @@ A real-time giveaway and game management tool for EVE Online fleet operations. A
    ```
 4. **Run the Tool**:
    ```bash
-   python main.py
+   python src\main.py
    ```
    Or double-click `run.bat` on Windows
 
@@ -80,7 +80,7 @@ To create a standalone `.exe` file that doesn't require Python:
 1. **Run the build script**:
    ```bash
    # Double-click build_exe.bat
-   # Or run: python -m PyInstaller --onefile --windowed main.py
+   # Or run: python -m PyInstaller --onefile --windowed src\main.py
    ```
 
 2. **Find your executable**:
@@ -160,7 +160,9 @@ Currently set to 2 minutes. To change, modify:
 
 ```
 eve.giveaway/
-├── main.py              # Main application
+├── src/                 # Source code folder
+│   ├── main.py         # Main application
+│   └── test_gui.py     # Minimal GUI test
 ├── requirements.txt     # Python dependencies
 ├── admins.template.txt  # Admin configuration template
 ├── setup.bat           # Complete setup installer (recommended)
@@ -168,7 +170,6 @@ eve.giveaway/
 ├── run.bat             # Windows launcher
 ├── build_exe.bat       # Build standalone executable
 ├── diagnose.bat        # System diagnostics tool
-├── test_gui.py         # Minimal GUI test
 └── README.md           # This file
 ```
 
@@ -182,7 +183,7 @@ If you see a white screen or the application doesn't load properly:
    - This will test Python, tkinter, and basic GUI functionality
 
 2. **Test basic GUI**:
-   - Run `python test_gui.py` to test minimal GUI functionality
+   - Run `python src\test_gui.py` to test minimal GUI functionality
    - If this works, the main app should work too
 
 3. **Common causes**:
