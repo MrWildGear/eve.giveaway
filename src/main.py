@@ -352,10 +352,14 @@ class GameManager:
         try:
             # Handle case-insensitive command parsing using regex
             import re
-            range_match = re.search(r'!pir\s+(\d+-\d+)', command, re.IGNORECASE)
+            # More strict pattern: exactly two numbers separated by single dash, no extra characters
+            range_match = re.search(r'!pir\s+(\d+)-(\d+)(?:\s|$)', command, re.IGNORECASE)
             if range_match:
-                range_str = range_match.group(1)
-                min_val, max_val = map(int, range_str.split('-'))
+                min_val, max_val = map(int, range_match.groups())
+                # Validate range
+                if min_val > max_val:
+                    self.gui.update_game_status(f"❌ Invalid range: {min_val}-{max_val}. Min must be ≤ Max.")
+                    return
                 target = random.randint(min_val, max_val)
                 
                 self.current_game = {
@@ -388,10 +392,14 @@ class GameManager:
         try:
             # Handle case-insensitive command parsing using regex
             import re
-            range_match = re.search(r'!gtn\s+(\d+-\d+)', command, re.IGNORECASE)
+            # More strict pattern: exactly two numbers separated by single dash, no extra characters
+            range_match = re.search(r'!gtn\s+(\d+)-(\d+)(?:\s|$)', command, re.IGNORECASE)
             if range_match:
-                range_str = range_match.group(1)
-                min_val, max_val = map(int, range_str.split('-'))
+                min_val, max_val = map(int, range_match.groups())
+                # Validate range
+                if min_val > max_val:
+                    self.gui.update_game_status(f"❌ Invalid range: {min_val}-{max_val}. Min must be ≤ Max.")
+                    return
                 target = random.randint(min_val, max_val)
                 
                 self.current_game = {
@@ -500,6 +508,8 @@ class GameManager:
         else:
             self.gui.update_game_status("❌ Game ended! No participants.")
         
+        # Stop timer thread and clean up
+        self._cleanup_timer_thread()
         self.current_game['active'] = False
     
     def clear_game(self, admin_name):
@@ -509,6 +519,8 @@ class GameManager:
             return
         print(f"DEBUG: {admin_name} is confirmed admin, clearing game")
             
+        # Stop timer thread and clean up
+        self._cleanup_timer_thread()
         self.current_game = None
         self.gui.clear_participants()
         self.gui.update_game_status("🧹 Game cleared! Ready for new game.")
@@ -685,35 +697,58 @@ class GameManager:
             return False
     
     def start_game_timer(self):
-        """Start a timer that will automatically end the game after 5 minutes"""
+        """Start a timer that will automatically end the game after configured minutes"""
+        # Store reference to current timer thread for cleanup
+        if hasattr(self, 'timer_thread') and self.timer_thread and self.timer_thread.is_alive():
+            # Stop previous timer thread if it exists
+            self.timer_thread.cancel = True
+            self.timer_thread.join(timeout=1)
+        
         def timer_thread():
-            while self.current_game and self.current_game['active']:
+            # Add cancel flag to thread
+            timer_thread.cancel = False
+            while self.current_game and self.current_game['active'] and not timer_thread.cancel:
                 time.sleep(1)  # Check every second
-                if datetime.now() >= self.current_game['end_time']:
-                    # Game time is up!
-                    if self.current_game['active']:
-                        self.current_game['active'] = False
-                        self.gui.update_game_status("⏰ Time's up! Game ended automatically!")
-                        
-                        # Select winner
-                        if self.current_game['type'] == 'PIR':
-                            winner = self.select_pir_winner()
-                        else:  # GTN
-                            winner = self.select_gtn_winner()
-                        
-                        if winner:
-                            if winner['type'] == 'single':
-                                self.gui.update_game_status(f"🏆 Game ended! Winner: {winner['name']} with guess {winner['guess']}\n🎯 Target was: {self.current_game['target']}")
-                            else:  # multiple winners
-                                winner_names = ", ".join(winner['names'])
-                                self.gui.update_game_status(f"🏆 Game ended! Winners: {winner_names} with guess {winner['guess']}\n🎯 Target was: {self.current_game['target']}")
-                        else:
-                            self.gui.update_game_status("⏰ Game ended! No participants.")
+                try:
+                    if datetime.now() >= self.current_game['end_time']:
+                        # Game time is up!
+                        if self.current_game and self.current_game['active']:
+                            self.current_game['active'] = False
+                            self.gui.update_game_status("⏰ Time's up! Game ended automatically!")
+                            
+                            # Select winner
+                            if self.current_game['type'] == 'PIR':
+                                winner = self.select_pir_winner()
+                            else:  # GTN
+                                winner = self.select_gtn_winner()
+                            
+                            if winner:
+                                if winner['type'] == 'single':
+                                    self.gui.update_game_status(f"🏆 Game ended! Winner: {winner['name']} with guess {winner['guess']}\n🎯 Target was: {self.current_game['target']}")
+                                else:  # multiple winners
+                                    winner_names = ", ".join(winner['names'])
+                                    self.gui.update_game_status(f"🏆 Game ended! Winners: {winner_names} with guess {winner['guess']}\n🎯 Target was: {self.current_game['target']}")
+                            else:
+                                self.gui.update_game_status("⏰ Game ended! No participants.")
+                        break
+                except Exception as e:
+                    print(f"Error in timer thread: {e}")
                     break
         
         # Start timer in a separate thread
-        timer_thread = threading.Thread(target=timer_thread, daemon=True)
-        timer_thread.start()
+        self.timer_thread = threading.Thread(target=timer_thread, daemon=True)
+        self.timer_thread.start()
+    
+    def _cleanup_timer_thread(self):
+        """Clean up timer thread to prevent memory leaks and crashes"""
+        if hasattr(self, 'timer_thread') and self.timer_thread and self.timer_thread.is_alive():
+            try:
+                self.timer_thread.cancel = True
+                self.timer_thread.join(timeout=2)
+                if self.timer_thread.is_alive():
+                    print("Warning: Timer thread did not stop gracefully")
+            except Exception as e:
+                print(f"Error cleaning up timer thread: {e}")
 
 class EVEGiveawayGUI:
     def __init__(self):
