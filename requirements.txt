@@ -1,0 +1,7 @@
+# EVE Giveaway Tool Dependencies
+# 
+# Core dependencies required for the application to run
+watchdog>=2.1.0
+
+# Note: tkinter is included with Python standard library
+# No additional installation needed for tkinter

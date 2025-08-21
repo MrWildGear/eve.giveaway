@@ -4,6 +4,7 @@ import os
 import re
 import random
 import time
+import sys
 from datetime import datetime, timedelta
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -80,23 +81,88 @@ class EVEChatMonitor(FileSystemEventHandler):
         if eve_logs_path:
             self.eve_logs_path = eve_logs_path
         else:
-            self.eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
+            self.eve_logs_path = self.detect_eve_logs_path()
         self.current_files = {}
+        
+    def detect_eve_logs_path(self):
+        """Detect EVE logs path across different operating systems and configurations"""
+        possible_paths = []
+        
+        # Windows paths
+        if os.name == 'nt':
+            # Standard Windows paths
+            possible_paths.extend([
+                os.path.expanduser("~/Documents/EVE/logs/Chatlogs"),
+                os.path.expanduser("~/Documents/EVE/logs/Gamelogs"),  # Some EVE versions use this
+                os.path.expanduser("~/My Documents/EVE/logs/Chatlogs"),  # Non-English Windows
+                os.path.expanduser("~/My Documents/EVE/logs/Gamelogs"),
+                os.path.expanduser("~/OneDrive/Documents/EVE/logs/Chatlogs"),  # OneDrive
+                os.path.expanduser("~/OneDrive/Documents/EVE/logs/Gamelogs"),
+            ])
+            
+            # Check common drive letters
+            for drive in ['C:', 'D:', 'E:']:
+                possible_paths.extend([
+                    f"{drive}/Users/{os.getenv('USERNAME', '')}/Documents/EVE/logs/Chatlogs",
+                    f"{drive}/Users/{os.getenv('USERNAME', '')}/Documents/EVE/logs/Gamelogs",
+                    f"{drive}/Users/{os.getenv('USERNAME', '')}/My Documents/EVE/logs/Chatlogs",
+                    f"{drive}/Users/{os.getenv('USERNAME', '')}/My Documents/EVE/logs/Gamelogs",
+                ])
+        
+        # macOS paths
+        elif os.name == 'posix' and os.uname().sysname == 'Darwin':
+            possible_paths.extend([
+                os.path.expanduser("~/Documents/EVE/logs/Chatlogs"),
+                os.path.expanduser("~/Documents/EVE/logs/Gamelogs"),
+            ])
+        
+        # Linux paths
+        elif os.name == 'posix':
+            possible_paths.extend([
+                os.path.expanduser("~/Documents/EVE/logs/Chatlogs"),
+                os.path.expanduser("~/Documents/EVE/logs/Gamelogs"),
+                os.path.expanduser("~/EVE/logs/Chatlogs"),
+                os.path.expanduser("~/EVE/logs/Gamelogs"),
+            ])
+        
+        # Test each path and return the first valid one
+        for path in possible_paths:
+            if os.path.exists(path) and os.path.isdir(path):
+                print(f"DEBUG: Found EVE logs directory: {path}")
+                return path
+        
+        # If no path found, return the most likely default
+        default_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
+        print(f"WARNING: No EVE logs directory found. Using default: {default_path}")
+        return default_path
         
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith('.txt'):
+            print(f"DEBUG: File modified: {event.src_path}")
+            # Minimal delay to ensure file is fully written
+            time.sleep(0.05)
+            self.process_chat_log(event.src_path)
+    
+    def on_created(self, event):
+        """Handle new file creation"""
+        if not event.is_directory and event.src_path.endswith('.txt'):
+            print(f"DEBUG: New file created: {event.src_path}")
+            # Minimal delay to ensure file is fully written
+            time.sleep(0.1)
             self.process_chat_log(event.src_path)
     
     def process_chat_log(self, file_path):
         try:
-            # EVE Online uses UTF-16 encoding - try this first
-            encodings = ['utf-16', 'utf-8', 'cp1252', 'iso-8859-1']
+            # Enhanced encoding detection for EVE Online logs
+            encodings = ['utf-16', 'utf-8', 'utf-8-sig', 'cp1252', 'iso-8859-1', 'latin-1']
             lines = None
+            used_encoding = None
             
             for encoding in encodings:
                 try:
                     with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
                         lines = f.readlines()
+                        used_encoding = encoding
                         break
                 except Exception as e:
                     continue
@@ -108,11 +174,58 @@ class EVEChatMonitor(FileSystemEventHandler):
                     # Clean up EVE log format: remove null bytes and fix spacing
                     cleaned_line = self.clean_eve_log_line(last_line)
                     if cleaned_line:
+                        print(f"DEBUG: Read with encoding: {used_encoding}")
                         print(f"DEBUG: Original line: '{last_line[:100]}...'")
                         print(f"DEBUG: Cleaned line: '{cleaned_line}'")
                         self.parse_message(cleaned_line)
+                        
+                        # Check if we should switch to a more recent chat log file
+                        self.check_for_newer_chatlog()
         except Exception as e:
-            print(f"Error reading chat log: {e}")
+            print(f"Error reading chat log {file_path}: {e}")
+            # Try to provide more helpful error information
+            try:
+                file_size = os.path.getsize(file_path)
+                print(f"File size: {file_size} bytes")
+            except:
+                pass
+    
+    def check_for_newer_chatlog(self):
+        """Check if there's a newer chat log file and switch to it"""
+        try:
+            if not hasattr(self, 'eve_logs_path') or not self.eve_logs_path:
+                return
+                
+            # Find all chat log files in the directory
+            chat_files = []
+            for filename in os.listdir(self.eve_logs_path):
+                if filename.endswith('.txt') and 'Chat' in filename:
+                    file_path = os.path.join(self.eve_logs_path, filename)
+                    try:
+                        mod_time = os.path.getmtime(file_path)
+                        chat_files.append((filename, mod_time, file_path))
+                    except:
+                        continue
+            
+            if not chat_files:
+                return
+                
+            # Sort by modification time (newest first)
+            chat_files.sort(key=lambda x: x[1], reverse=True)
+            newest_file = chat_files[0]
+            
+            # Check if the newest file is different from what we're currently monitoring
+            current_file = getattr(self, 'current_chat_file', None)
+            if current_file != newest_file[0]:
+                print(f"DEBUG: Newer chat log detected: {newest_file[0]} (was monitoring: {current_file})")
+                self.current_chat_file = newest_file[0]
+                
+                # Process the newest file to catch up on any missed messages
+                print(f"DEBUG: Processing newest chat log: {newest_file[0]}")
+                self.process_chat_log(newest_file[2])
+                
+        except Exception as e:
+            print(f"Error checking for newer chat log: {e}")
     
     def clean_eve_log_line(self, line):
         """Clean up EVE log line by removing null bytes and fixing spacing"""
@@ -151,12 +264,43 @@ class EVEChatMonitor(FileSystemEventHandler):
             return line
     
     def parse_message(self, message):
-        # Parse EVE chat format: [ timestamp ] CharacterName > message
-        pattern = r'\[ ([\d\.]+ [\d:]+) \] ([^>]+) > (.+)'
-        match = re.match(pattern, message)
+        # Enhanced EVE chat format parsing for different log formats
+        patterns = [
+            # Standard format: [ timestamp ] CharacterName > message
+            r'\[ ([\d\.]+ [\d:]+) \] ([^>]+) > (.+)',
+            # Alternative format: [ timestamp ] CharacterName: message
+            r'\[ ([\d\.]+ [\d:]+) \] ([^:]+): (.+)',
+            # Compact format: [timestamp] CharacterName > message
+            r'\[([\d\.]+ [\d:]+)\] ([^>]+) > (.+)',
+            # Minimal format: CharacterName > message
+            r'([^>]+) > (.+)',
+            # EVE specific format: [timestamp] CharacterName > message
+            r'\[([\d\.]+ [\d:]+)\] ([^>]+) > (.+)',
+        ]
+        
+        match = None
+        used_pattern = None
+        
+        for pattern in patterns:
+            match = re.match(pattern, message)
+            if match:
+                used_pattern = pattern
+                break
         
         if match:
-            timestamp, character_name, content = match.groups()
+            if len(match.groups()) == 3:
+                # Pattern with timestamp
+                timestamp, character_name, content = match.groups()
+                print(f"DEBUG: Used pattern: {used_pattern}")
+            elif len(match.groups()) == 2:
+                # Pattern without timestamp
+                character_name, content = match.groups()
+                timestamp = "unknown"
+                print(f"DEBUG: Used pattern (no timestamp): {used_pattern}")
+            else:
+                print(f"DEBUG: Unexpected number of groups: {len(match.groups())}")
+                return
+            
             character_name = character_name.strip()
             content = content.strip()
             
@@ -185,7 +329,10 @@ class EVEChatMonitor(FileSystemEventHandler):
             else:
                 print(f"DEBUG: No command detected in content: '{content}'")
         else:
-            print(f"DEBUG: Message did not match pattern: '{message}'")
+            print(f"DEBUG: Message did not match any pattern: '{message}'")
+            # Try to extract any potential command from the message
+            if '!' in message:
+                print(f"DEBUG: Found '!' in message, might be a command: {message}")
 
 class GameManager:
     def __init__(self, gui, config_manager=None):
@@ -217,12 +364,12 @@ class GameManager:
                     'range': f"{min_val}-{max_val}",
                     'target': target,
                     'start_time': datetime.now(),
-                    'end_time': datetime.now() + timedelta(minutes=self.game_manager.config_manager.get_game_timer_minutes()),
+                    'end_time': datetime.now() + timedelta(minutes=self.config_manager.get_game_timer_minutes()),
                     'participants': {},
                     'active': True
                 }
                 
-                self.gui.update_game_status(f"🎯 Price is Right game started by {admin_name}!\nRange: {min_val}-{max_val}\n⏰ Game ends in 5 minutes!\nPlayers use ?number to enter!")
+                self.gui.update_game_status(f"🎯 Price is Right game started by {admin_name}!\nRange: {min_val}-{max_val}\n⏰ Game ends in {self.config_manager.get_game_timer_minutes()} minutes!\nPlayers use ?number to enter!")
                 self.gui.clear_participants()
                 
                 # Start the game timer
@@ -253,12 +400,12 @@ class GameManager:
                     'range': f"{min_val}-{max_val}",
                     'target': target,
                     'start_time': datetime.now(),
-                    'end_time': datetime.now() + timedelta(minutes=self.game_manager.config_manager.get_game_timer_minutes()),
+                    'end_time': datetime.now() + timedelta(minutes=self.config_manager.get_game_timer_minutes()),
                     'participants': {},
                     'active': True
                 }
                 
-                self.gui.update_game_status(f"🎲 Guess the Number game started by {admin_name}!\nRange: {min_val}-{max_val}\n⏰ Game ends in 5 minutes!\nPlayers use ?number to enter!")
+                self.gui.update_game_status(f"🎲 Guess the Number game started by {admin_name}!\nRange: {min_val}-{max_val}\n⏰ Game ends in {self.config_manager.get_game_timer_minutes()} minutes!\nPlayers use ?number to enter!")
                 self.gui.clear_participants()
                 
                 # Start the game timer
@@ -470,28 +617,58 @@ class GameManager:
         """Check if username is in admin list by reading from admins.txt file"""
         try:
             admin_list = set()
-            # Try multiple possible locations for admins.txt
+            # Enhanced path detection for admins.txt
             possible_paths = [
-                'admins.txt',  # Current directory
+                'admins.txt',  # Current working directory
+                os.path.join(os.getcwd(), 'admins.txt'),  # Current working directory (explicit)
                 os.path.join(os.path.dirname(__file__), 'admins.txt'),  # Same directory as script
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'admins.txt'),  # Parent directory
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'admins.txt')  # Grandparent directory
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'admins.txt'),  # Grandparent directory
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'admins.txt'),  # Great-grandparent directory
             ]
+            
+            # Add executable directory for PyInstaller builds
+            if hasattr(sys, '_MEIPASS'):  # PyInstaller executable
+                possible_paths.insert(0, os.path.join(sys._MEIPASS, 'admins.txt'))
+                possible_paths.insert(0, os.path.join(os.path.dirname(sys.executable), 'admins.txt'))
+            
+            # Add user's home directory
+            home_dir = os.path.expanduser("~")
+            possible_paths.extend([
+                os.path.join(home_dir, 'admins.txt'),
+                os.path.join(home_dir, 'Documents', 'admins.txt'),
+                os.path.join(home_dir, 'Desktop', 'admins.txt'),
+            ])
             
             admin_file_found = False
             for admin_path in possible_paths:
                 if os.path.exists(admin_path):
                     try:
-                        with open(admin_path, 'r', encoding='utf-8') as f:
-                            for line in f:
-                                line = line.strip()
-                                # Skip empty lines and comments
-                                if line and not line.startswith('#'):
-                                    admin_list.add(line)
-                        admin_file_found = True
-                        print(f"DEBUG: Loaded admin list from: {admin_path}")
-                        print(f"DEBUG: Admin users: {admin_list}")
-                        break
+                        # Try multiple encodings for better compatibility
+                        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'iso-8859-1']
+                        file_read = False
+                        
+                        for encoding in encodings:
+                            try:
+                                with open(admin_path, 'r', encoding=encoding) as f:
+                                    for line in f:
+                                        line = line.strip()
+                                        # Skip empty lines and comments
+                                        if line and not line.startswith('#'):
+                                            admin_list.add(line)
+                                    file_read = True
+                                    break
+                            except UnicodeDecodeError:
+                                continue
+                        
+                        if file_read:
+                            admin_file_found = True
+                            print(f"DEBUG: Loaded admin list from: {admin_path}")
+                            print(f"DEBUG: Admin users: {admin_list}")
+                            break
+                        else:
+                            print(f"Warning: Could not read {admin_path} with any encoding")
+                            
                     except Exception as e:
                         print(f"Warning: Could not read {admin_path}: {e}")
                         continue
@@ -828,21 +1005,137 @@ class EVEGiveawayGUI:
         instructions_frame.rowconfigure(1, weight=1)  # Content frame gets the weight
     
     def start_monitoring(self):
-        # Use configured path or fallback to default
+        # Use configured path or enhanced auto-detection
         eve_logs_path = self.config_manager.get_eve_logs_path()
         if not eve_logs_path:
-            eve_logs_path = os.path.expanduser("~/Documents/EVE/logs/Chatlogs")
+            # Use the enhanced path detection from EVEChatMonitor
+            eve_logs_path = self.chat_monitor.detect_eve_logs_path()
         
         if os.path.exists(eve_logs_path):
             self.observer = Observer()
             self.observer.schedule(self.chat_monitor, eve_logs_path, recursive=False)
             self.observer.start()
-            self.update_game_status("🔍 Monitoring EVE chat logs...\n✅ Ready for games!\n\nUse !PIR or !GTN to start a game!")
+            
+            # Find and monitor the most recent chat log file
+            self.find_and_monitor_latest_chatlog(eve_logs_path)
+            
+            # Process existing files in the directory
+            self.process_existing_files(eve_logs_path)
+            
+            self.update_game_status(f"🔍 Monitoring EVE chat logs at: {eve_logs_path}\n✅ Ready for games!\n\nUse !PIR or !GTN to start a game!")
             
             # Start countdown timer update
             self.start_countdown_timer()
         else:
-            self.update_game_status(f"❌ EVE logs directory not found: {eve_logs_path}\nPlease make sure EVE Online is installed.")
+            # Try to find an alternative path
+            alternative_path = self.chat_monitor.detect_eve_logs_path()
+            if alternative_path != eve_logs_path and os.path.exists(alternative_path):
+                self.observer = Observer()
+                self.observer.schedule(self.chat_monitor, alternative_path, recursive=False)
+                self.observer.start()
+                
+                # Find and monitor the most recent chat log file
+                self.find_and_monitor_latest_chatlog(alternative_path)
+                
+                # Process existing files in the directory
+                self.process_existing_files(alternative_path)
+                
+                self.update_game_status(f"🔍 Monitoring EVE chat logs at: {alternative_path}\n✅ Ready for games!\n\nUse !PIR or !GTN to start a game!")
+                
+                # Start countdown timer update
+                self.start_countdown_timer()
+            else:
+                self.update_game_status(f"❌ EVE logs directory not found at: {eve_logs_path}\nAlternative path also not found: {alternative_path}\nPlease check your EVE Online installation or configure the path in settings.")
+    
+    def find_and_monitor_latest_chatlog(self, logs_directory):
+        """Find the most recent chat log file and set it as the current one to monitor"""
+        try:
+            # Find all chat log files
+            chat_files = []
+            for filename in os.listdir(logs_directory):
+                if filename.endswith('.txt') and 'Chat' in filename:
+                    file_path = os.path.join(logs_directory, filename)
+                    try:
+                        mod_time = os.path.getmtime(file_path)
+                        chat_files.append((filename, mod_time, file_path))
+                    except:
+                        continue
+            
+            if chat_files:
+                # Sort by modification time (newest first)
+                chat_files.sort(key=lambda x: x[1], reverse=True)
+                latest_file = chat_files[0]
+                
+                # Set this as the current chat file to monitor
+                self.chat_monitor.current_chat_file = latest_file[0]
+                print(f"DEBUG: Monitoring latest chat log: {latest_file[0]} (modified: {time.ctime(latest_file[1])})")
+                
+                # Process this file to catch up on any recent messages
+                self.chat_monitor.process_chat_log(latest_file[2])
+            else:
+                print("DEBUG: No chat log files found in directory")
+                
+        except Exception as e:
+            print(f"Error finding latest chat log: {e}")
+    
+    def restart_monitoring(self, new_path):
+        """Restart file monitoring with a new path"""
+        try:
+            print(f"DEBUG: Restarting monitoring with new path: {new_path}")
+            
+            # Stop current monitoring
+            if self.observer:
+                self.observer.stop()
+                self.observer.join()
+                self.observer = None
+            
+            # Update chat monitor path
+            self.chat_monitor.eve_logs_path = new_path
+            
+            # Start new monitoring
+            if os.path.exists(new_path):
+                self.observer = Observer()
+                self.observer.schedule(self.chat_monitor, new_path, recursive=False)
+                self.observer.start()
+                
+                # Process existing files in the new directory
+                self.process_existing_files(new_path)
+                
+                self.update_game_status(f"🔄 Monitoring restarted at: {new_path}\n✅ Ready for games!")
+                print(f"DEBUG: Monitoring restarted successfully at {new_path}")
+            else:
+                self.update_game_status(f"❌ Cannot monitor {new_path} - directory not found")
+                print(f"DEBUG: Failed to restart monitoring - path not found: {new_path}")
+                
+        except Exception as e:
+            print(f"Error restarting monitoring: {e}")
+            self.update_game_status(f"❌ Error restarting monitoring: {e}")
+    
+    def process_existing_files(self, directory_path):
+        """Process all existing .txt files in the directory"""
+        try:
+            if not os.path.exists(directory_path) or not os.path.isdir(directory_path):
+                return
+            
+            txt_files = [f for f in os.listdir(directory_path) if f.endswith('.txt')]
+            if not txt_files:
+                print(f"DEBUG: No .txt files found in {directory_path}")
+                return
+            
+            print(f"DEBUG: Processing {len(txt_files)} existing .txt files in {directory_path}")
+            
+            for filename in txt_files:
+                file_path = os.path.join(directory_path, filename)
+                try:
+                    # Check if file has content (not empty)
+                    if os.path.getsize(file_path) > 0:
+                        print(f"DEBUG: Processing existing file: {filename}")
+                        self.chat_monitor.process_chat_log(file_path)
+                except Exception as e:
+                    print(f"DEBUG: Error processing existing file {filename}: {e}")
+                    
+        except Exception as e:
+            print(f"Error processing existing files: {e}")
     
     def start_countdown_timer(self):
         """Start a timer that updates the countdown display every second"""
@@ -880,6 +1173,21 @@ class EVEGiveawayGUI:
         # Start countdown in a separate thread
         countdown_thread = threading.Thread(target=countdown_update, daemon=True)
         countdown_thread.start()
+        
+        # Start chat log monitoring check every  seconds
+        def chatlog_monitor():
+            while True:
+                try:
+                    if hasattr(self, 'chat_monitor') and hasattr(self.chat_monitor, 'eve_logs_path'):
+                        self.chat_monitor.check_for_newer_chatlog()
+                    time.sleep(1)  # Check every 5 seconds
+                except Exception as e:
+                    print(f"Error in chat log monitor: {e}")
+                    time.sleep(1)
+        
+        # Start chat log monitoring in a separate thread
+        chatlog_thread = threading.Thread(target=chatlog_monitor, daemon=True)
+        chatlog_thread.start()
     
     def show_settings(self):
         """Show settings dialog for configuring EVE logs path and other options"""
@@ -988,6 +1296,30 @@ class EVEGiveawayGUI:
                 messagebox.showerror("Invalid Input", "Game timer must be a positive number!")
                 return
             
+            # Validate EVE logs path if provided
+            new_path = self.path_var.get().strip()
+            if new_path and not os.path.exists(new_path):
+                from tkinter import messagebox
+                messagebox.showerror("Invalid Path", f"The path '{new_path}' does not exist!")
+                return
+            
+            if new_path and not os.path.isdir(new_path):
+                from tkinter import messagebox
+                messagebox.showerror("Invalid Path", f"The path '{new_path}' is not a directory!")
+                return
+            
+            # Check if path contains any .txt files
+            if new_path:
+                txt_files = [f for f in os.listdir(new_path) if f.endswith('.txt')]
+                if not txt_files:
+                    from tkinter import messagebox
+                    result = messagebox.askyesno("No Chat Logs", 
+                        f"The directory '{new_path}' contains no .txt files.\n\n"
+                        "This might not be an EVE chat logs directory.\n\n"
+                        "Do you want to continue anyway?")
+                    if not result:
+                        return
+            
             # Read existing config or create new
             config_lines = []
             if os.path.exists('config.txt'):
@@ -1026,9 +1358,14 @@ class EVEGiveawayGUI:
             # Reload config
             self.config_manager.load_config()
             
+            # Restart monitoring with new path if it changed
+            old_path = self.config_manager.get_eve_logs_path()
+            if new_path != old_path:
+                self.restart_monitoring(new_path)
+            
             # Show success message
             from tkinter import messagebox
-            messagebox.showinfo("Settings Saved", "Settings have been saved successfully!\n\nYou may need to restart the application for some changes to take effect.")
+            messagebox.showinfo("Settings Saved", "Settings have been saved successfully!\n\nMonitoring has been updated to use the new path.")
             
             # Close the settings window
             settings_window.destroy()
@@ -1280,20 +1617,47 @@ class EVEGiveawayGUI:
             self.participants_tree.heading(column, text=f"{current_text} ↑")
     
     def update_game_status(self, message):
-        self.status_text.delete(1.0, tk.END)
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        self.status_text.insert(tk.END, f"[{timestamp}] {message}")
-        self.status_text.see(tk.END)
+        """Thread-safe game status update"""
+        if hasattr(self, 'root') and self.root:
+            self.root.after(0, self._update_game_status_safe, message)
+    
+    def _update_game_status_safe(self, message):
+        """Internal method to update game status (called from main thread)"""
+        try:
+            self.status_text.delete(1.0, tk.END)
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.status_text.insert(tk.END, f"[{timestamp}] {message}")
+            self.status_text.see(tk.END)
+        except Exception as e:
+            print(f"Error updating game status: {e}")
     
     def add_participant(self, username, guess):
-        time_str = datetime.now().strftime('%H:%M:%S')
-        print(f"DEBUG: GUI adding participant {username} with guess {guess} at {time_str}")
-        self.participants_tree.insert('', 'end', values=(username, guess, time_str))
-        print(f"DEBUG: Participant tree now has {len(self.participants_tree.get_children())} entries")
+        """Thread-safe participant addition"""
+        if hasattr(self, 'root') and self.root:
+            self.root.after(0, self._add_participant_safe, username, guess)
+    
+    def _add_participant_safe(self, username, guess):
+        """Internal method to add participant (called from main thread)"""
+        try:
+            time_str = datetime.now().strftime('%H:%M:%S')
+            print(f"DEBUG: GUI adding participant {username} with guess {guess} at {time_str}")
+            self.participants_tree.insert('', 'end', values=(username, guess, time_str))
+            print(f"DEBUG: Participant tree now has {len(self.participants_tree.get_children())} entries")
+        except Exception as e:
+            print(f"Error adding participant: {e}")
     
     def clear_participants(self):
-        for item in self.participants_tree.get_children():
-            self.participants_tree.delete(item)
+        """Thread-safe participant clearing"""
+        if hasattr(self, 'root') and self.root:
+            self.root.after(0, self._clear_participants_safe)
+    
+    def _clear_participants_safe(self):
+        """Internal method to clear participants (called from main thread)"""
+        try:
+            for item in self.participants_tree.get_children():
+                self.participants_tree.delete(item)
+        except Exception as e:
+            print(f"Error clearing participants: {e}")
     
     def load_window_settings(self):
         """Load saved window size and position from settings file"""

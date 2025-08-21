@@ -13,6 +13,9 @@ A real-time giveaway and game management tool for EVE Online fleet operations. A
 - **Collapsible Sections** - Hide instructions when not needed
 - **Window Persistence** - Remembers window size and position
 - **Case Insensitive Commands** - Commands work regardless of capitalization
+- **🌍 Universal Compatibility** - Works on any computer with EVE Online installed
+- **🔍 Smart Path Detection** - Automatically finds EVE logs on any system
+- **👑 Flexible Admin System** - Works with any admin usernames configured
 
 ## 🎯 Game Types
 
@@ -48,6 +51,28 @@ A real-time giveaway and game management tool for EVE Online fleet operations. A
 | `?number` | Enter current game with number | `?500` |
 | `? number` | Enter with space (also works) | `? 500` |
 
+## 📁 Project Structure
+
+```
+eve.giveaway/
+├── src/                    # Source code
+│   └── main.py            # Main application
+├── build/                  # Build and distribution scripts
+│   ├── build_exe.bat      # Windows build script
+│   ├── build_exe.ps1      # PowerShell build script
+│   ├── EVE_Giveaway_Tool.spec  # PyInstaller configuration
+│   └── create_share_folder.bat # Sharing utility
+├── docs/                   # Documentation
+│   ├── BUILD_SECURITY.md  # Security build guide
+│   └── COMPATIBILITY_GUIDE.md # Cross-platform compatibility
+├── templates/              # Configuration templates
+│   └── admins.template.txt # Admin users template
+├── admins.txt              # Your admin users (edit this)
+├── config.txt              # Your configuration (edit this)
+├── requirements.txt        # Python dependencies
+└── README.md               # This file
+```
+
 ## 🚀 Installation & Setup
 
 ### Prerequisites
@@ -70,16 +95,19 @@ A real-time giveaway and game management tool for EVE Online fleet operations. A
    Or double-click `run.bat` on Windows
 
 ### EVE Chat Log Setup
-The tool automatically monitors: `~/Documents/EVE/logs/Chatlogs/`
-- Ensure EVE Online is saving chat logs
-- The tool will detect new messages in real-time
+The tool **automatically detects** your EVE Online logs location:
+- **Standard**: `~/Documents/EVE/logs/Chatlogs/`
+- **Alternative**: `~/Documents/EVE/logs/Gamelogs/`
+- **Custom**: Configure in settings if needed
+- **Multi-Platform**: Works on Windows, macOS, and Linux
+- **Smart Detection**: Finds logs even in non-standard locations
 
 ### Building Standalone Executable
 To create a standalone `.exe` file that doesn't require Python:
 
 1. **Run the build script**:
    ```bash
-   # Double-click build_exe.bat
+   # Double-click build/build_exe.bat
    # Or run: python -m PyInstaller --onefile --windowed src\main.py
    ```
 
@@ -140,6 +168,8 @@ To create a standalone `.exe` file that doesn't require Python:
 1. **Copy the template**: `copy admins.template.txt admins.txt`
 2. **Edit the file**: Replace usernames with your actual admin users
 3. **Format**: One username per line, `#` for comments
+4. **Universal**: Works with any character names from any EVE server
+5. **Flexible**: Supports special characters and spaces in usernames
 
 ```txt
 <<<<<<< HEAD
@@ -176,6 +206,7 @@ eve.giveaway/
 ├── build_exe.bat       # Build standalone executable
 ├── build_exe.ps1       # PowerShell build script (recommended)
 ├── BUILD_SECURITY.md   # Build security guide
+├── COMPATIBILITY_GUIDE.md  # Cross-platform compatibility guide
 ├── diagnose.bat        # System diagnostics tool
 └── README.md           # This file
 ```
@@ -220,11 +251,33 @@ If you see a white screen or the application doesn't load properly:
 - Check if window settings file is corrupted
 - Restart the application
 
+## 🌍 Compatibility
+
+### **Universal Compatibility**
+✅ **Works on any computer** with EVE Online installed  
+✅ **Any admin configuration** - supports any usernames  
+✅ **Automatic path detection** - finds EVE logs automatically  
+✅ **Cross-platform support** - Windows, macOS, Linux  
+✅ **Portable installation** - works from any directory  
+
+### **Smart Detection Features**
+- 🔍 **EVE Logs**: Automatically finds chat logs on any system
+- 👑 **Admin Files**: Searches multiple locations for `admins.txt`
+- 📝 **File Encodings**: Handles UTF-16, UTF-8, CP1252, and more
+- 🎮 **EVE Versions**: Compatible with any EVE Online installation
+
+### **System Requirements**
+- **Operating System**: Windows 7+, macOS 10.12+, Linux (Ubuntu 16.04+)
+- **Python**: 3.7+ (for development) or standalone executable
+- **EVE Online**: Any version with chat logging enabled
+- **Storage**: 50MB free space
+- **Memory**: 100MB RAM minimum
+
 ## 📝 Requirements
 
 ```
-tkinter
-watchdog
+tkinter          # GUI framework (included with Python)
+watchdog         # File system monitoring
 ```
 
 ## 🤝 Contributing

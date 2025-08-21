@@ -12,7 +12,7 @@
 # Linux: /home/YourUsername/Documents/EVE/logs/Chatlogs
 #
 # Leave empty to use automatic detection
-EVE_LOGS_PATH=C:/Users/Hamilton Norris/Documents/EVE/logs/Gamelogs
+EVE_LOGS_PATH=C:/Users/Hamilton Norris/Documents/EVE/logs/Chatlogs
 
 # GAME_TIMER_MINUTES: How long games run before auto-ending (default: 2)
 GAME_TIMER_MINUTES=2
